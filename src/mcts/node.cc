@@ -180,6 +180,8 @@ EdgeList::EdgeList(MoveList moves)
 // Node
 /////////////////////////////////////////////////////////////////////////
 
+Node g_nullNode(nullptr, 0);
+
 Node* Node::CreateSingleChildNode(Move move) {
   assert(!edges_);
   assert(!child_);
@@ -392,7 +394,7 @@ V4TrainingData Node::GetV4TrainingData(GameResult game_result,
 std::string EdgeAndNode::DebugString() const {
   if (!edge_) return "(no edge)";
   return edge_->DebugString() + " " +
-         (node_ ? node_->DebugString() : "(no node)");
+         (node_ != &g_nullNode ? node_->DebugString() : "(no node)");
 }
 
 /////////////////////////////////////////////////////////////////////////

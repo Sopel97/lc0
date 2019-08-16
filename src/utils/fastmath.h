@@ -28,6 +28,7 @@
 #pragma once
 
 #include <cstring>
+#include <immintrin.h>
 
 namespace lczero {
 // These stunts are performed by trained professionals, do not try this at home.
@@ -70,14 +71,7 @@ inline float FastExp(const float a) { return FastPow2(1.442695040f * a); }
 
 inline float FastInvSqrt(const float number)
 { 
-  const float x2 = number * 0.5F;
-  const float threehalfs = 1.5F;
-  float f;
-  uint32_t i;
-  memcpy(&i, &number, sizeof(float));
-  i  = 0x5f3759df - ( i >> 1 );
-  memcpy(&f, &i, sizeof(float));
-  return f * ( threehalfs - ( x2 * f * f ) );
+    return _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set_ss(number)));
 }
 
 }  // namespace lczero

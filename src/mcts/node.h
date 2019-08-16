@@ -301,6 +301,8 @@ class Node {
   friend class Edge;
 };
 
+extern Node g_nullNode;
+
 // Define __i386__  or __arm__ also for 32 bit Windows.
 #if defined(_M_IX86)
 #define __i386__
@@ -332,24 +334,24 @@ class EdgeAndNode {
   }
   // Arbitrary ordering just to make it possible to use in tuples.
   bool operator<(const EdgeAndNode& other) const { return edge_ < other.edge_; }
-  bool HasNode() const { return node_ != nullptr; }
+  bool HasNode() const { return node_ != &g_nullNode; }
   Edge* edge() const { return edge_; }
   Node* node() const { return node_; }
 
   // Proxy functions for easier access to node/edge.
   float GetQ(float default_q) const {
-    return (node_ && node_->GetN() > 0) ? node_->GetQ() : default_q;
+    return (node_->GetN() > 0) ? node_->GetQ() : default_q;
   }
   float GetD() const {
-    return (node_ && node_->GetN() > 0) ? node_->GetD() : 0.0f;
+    return node_->GetD();
   }
   // N-related getters, from Node (if exists).
-  uint32_t GetN() const { return node_ ? node_->GetN() : 0; }
-  int GetNStarted() const { return node_ ? node_->GetNStarted() : 0; }
-  uint32_t GetNInFlight() const { return node_ ? node_->GetNInFlight() : 0; }
+  uint32_t GetN() const { return node_->GetN(); }
+  int GetNStarted() const { return node_->GetNStarted(); }
+  uint32_t GetNInFlight() const { return node_->GetNInFlight(); }
 
   // Whether the node is known to be terminal.
-  bool IsTerminal() const { return node_ ? node_->IsTerminal() : false; }
+  bool IsTerminal() const { return node_->IsTerminal(); }
 
   // Edge related getters.
   float GetP() const { return edge_->GetP(); }
@@ -365,7 +367,7 @@ class EdgeAndNode {
 
   float GetNewU(float numerator) const {
     const float x = 1 + GetNStarted();
-    return numerator * GetP() * FastInvSqrt(x) / x;
+    return (numerator * GetP()) * (FastInvSqrt(x) / x);
   }
 
   int GetVisitsToReachU(float target_score, float numerator,
@@ -384,11 +386,9 @@ class EdgeAndNode {
     const auto q = GetQ(default_q);
     if (q >= target_score) return std::numeric_limits<int>::max();
     const auto n1 = GetNStarted() + 1;
-    const float inner = std::pow((GetP() * numerator) / (target_score - q), 2. / 3.);
-    return std::max(
-        1.0f,
-        std::min(std::floor(inner - n1) + 1,
-                 1e9f));
+    const float inner =
+        std::pow((GetP() * numerator) / (target_score - q), 2. / 3.);
+    return std::max(1.0f, std::min(std::floor(inner - n1) + 1, 1e9f));
   }
 
   std::string DebugString() const;
@@ -398,7 +398,7 @@ class EdgeAndNode {
   // didn't find anything, or as end iterator signal).
   Edge* edge_ = nullptr;
   // nullptr means that the edge doesn't yet have node extended.
-  Node* node_ = nullptr;
+  Node* node_ = &g_nullNode;
 };
 
 // TODO(crem) Replace this with less hacky iterator once we support C++17.
@@ -426,7 +426,7 @@ class Edge_Iterator : public EdgeAndNode {
 
   // Creates "begin()" iterator. Also happens to be a range constructor.
   Edge_Iterator(const EdgeList& edges, Ptr node_ptr)
-      : EdgeAndNode(edges.size() ? edges.get() : nullptr, nullptr),
+      : EdgeAndNode(edges.size() ? edges.get() : nullptr, &g_nullNode),
         node_ptr_(node_ptr),
         total_count_(edges.size()) {
     if (edge_) Actualize();
@@ -452,9 +452,9 @@ class Edge_Iterator : public EdgeAndNode {
   // If there is node, return it. Otherwise spawn a new one and return it.
   Node* GetOrSpawnNode(Node* parent,
                        std::unique_ptr<Node>* node_source = nullptr) {
-    if (node_) return node_;  // If there is already a node, return it.
+    if (node_ != &g_nullNode) return node_;  // If there is already a node, return it.
     Actualize();              // But maybe other thread already did that.
-    if (node_) return node_;  // If it did, return.
+    if (node_ != &g_nullNode) return node_;  // If it did, return.
     // Now we are sure we have to create a new node.
     // Suppose there are nodes with idx 3 and 7, and we want to insert one with
     // idx 5. Here is how it looks like:
@@ -499,7 +499,7 @@ class Edge_Iterator : public EdgeAndNode {
       node_ = (*node_ptr_).get();
       node_ptr_ = &node_->sibling_;
     } else {
-      node_ = nullptr;
+      node_ = &g_nullNode;
     }
   }
 
